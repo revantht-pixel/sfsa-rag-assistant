@@ -55,7 +55,18 @@ def web_search(state: SFSAAgenticState) -> SFSAAgenticState:
     logger.info("=" * 60)
     logger.info("AGENT 2: web_search")
     logger.info("=" * 60)
-    
+
+    if not settings.web_search_enabled:
+        # Off by default. Skip everything -- including the reformulation LLM call --
+        # so nothing about the question is sent anywhere. Same shape as "no results".
+        logger.info("Web search is disabled (SFSA_WEB_SEARCH_ENABLED is not true); skipping")
+        return {
+            "web_search_query": "",
+            "web_search_results": [],
+            "web_search_formatted": "No web search results found.",
+            "error": None
+        }
+
     # Use contextualized query (or fall back to original if not available)
     user_query = state.get("contextualized_query") or state.get("user_query", "")
     retrieved_context = state.get("retrieved_formatted", "")
@@ -210,9 +221,15 @@ def _search_tavily(query: str) -> List[Dict[str, Any]]:
     List[Dict[str, Any]]
         List of search results with title, url, content, and score
     """
+    if not settings.web_search_enabled:
+        # Last line of defence: this function is the only place a query can leave the
+        # server, so it refuses on its own even if some other path reaches it.
+        logger.error("Refusing to call Tavily: web search is disabled")
+        return []
+
     try:
         from tavily import TavilyClient
-        
+
         # Initialize Tavily client
         tavily_api_key = settings.tavily_api_key
         if not tavily_api_key:

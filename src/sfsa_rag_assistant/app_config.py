@@ -45,7 +45,9 @@ class Settings(BaseSettings):
         Tavily API key for web search (default: None, loaded from TAVILY_API_KEY)
     tavily_max_results : int
         Maximum number of web search results from Tavily (default: 3)
-    
+    web_search_enabled : bool
+        Master switch for web search (default: False -- no query leaves the server)
+
     max_validation_attempts : int
         Maximum number of validation loops for Agent 3 (default: 2)
     
@@ -73,7 +75,12 @@ class Settings(BaseSettings):
         validation_alias="TAVILY_API_KEY"  # Override SFSA_ prefix for this field
     )
     tavily_max_results: int = 3
-    
+    # Master switch for the web-search agent. OFF by default: SFSA's decision is that
+    # nothing about a member's question leaves the server. Turning web search on takes
+    # this flag AND a real TAVILY_API_KEY, so a placeholder key left in .env can never
+    # send a query to a third party. (SFSA_WEB_SEARCH_ENABLED)
+    web_search_enabled: bool = False
+
     # ─── Agent Configuration ────────────────────────────────────────────────
     max_validation_attempts: int = 2
     
@@ -82,7 +89,28 @@ class Settings(BaseSettings):
 
     # ─── Authentication Configuration ───────────────────────────────────────
     auth_db_path: str = "data/auth/sfsa_auth.db"
-    
+
+    # ─── Web API: wiki-session authentication and request limits ────────────
+    # The chat API keeps no passwords or accounts of its own: it asks the wiki
+    # who a request's login cookie belongs to (see wiki_auth.py).
+    wiki_api_url: str = "https://wiki.sfsa.org/api.php"
+    wiki_cookie_prefix: str = "wiki_db"            # the wiki's cookie prefix (its DB name)
+    wiki_tls_server_name: Optional[str] = None     # verify the wiki's TLS cert against this
+                                                   # hostname (only for a test copy served
+                                                   # under a different name)
+    wiki_request_timeout: float = 5.0
+    session_cache_ttl: int = 60                    # seconds a successful check is trusted
+    session_negative_ttl: int = 10                 # seconds a failed check is remembered
+    # Comma-separated lists (plain strings: no JSON quoting needed in .env)
+    allowed_origins: str = "https://rag.sfsa.org"  # origins allowed to POST to the API
+    frame_ancestors: str = "https://wiki.sfsa.org" # pages allowed to embed the chat iframe
+    citation_hosts: str = "wiki.sfsa.org"          # hosts the widget will render as links
+    max_inflight: int = 8                          # simultaneous questions (one per member)
+    max_question_chars: int = 2000
+    max_history_turns: int = 10
+    max_history_chars: int = 8000
+    max_body_bytes: int = 200_000
+
     # ─── LangSmith Configuration ────────────────────────────────────────────
     langsmith_project: str = "SFSA-Agentic-RAG"
     
@@ -147,6 +175,20 @@ class Settings(BaseSettings):
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
     
+    @staticmethod
+    def _split_list(value: str) -> list:
+        """Split a comma-separated setting into a clean list."""
+        return [item.strip() for item in value.split(",") if item.strip()]
+
+    def get_allowed_origins(self) -> list:
+        return self._split_list(self.allowed_origins)
+
+    def get_frame_ancestors(self) -> list:
+        return self._split_list(self.frame_ancestors)
+
+    def get_citation_hosts(self) -> list:
+        return self._split_list(self.citation_hosts)
+
     def validate_ollama_settings(self) -> bool:
         """
         Validate that Ollama settings are correct.

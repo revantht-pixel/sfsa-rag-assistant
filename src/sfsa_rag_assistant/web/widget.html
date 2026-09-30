@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>SFSA Assistant</title>
+<link rel="stylesheet" href="/widget.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>SFSA Assistant</h1>
+    <span id="who"></span>
+  </header>
+  <div id="notice" role="status" hidden></div>
+  <main id="log" aria-live="polite"></main>
+  <div id="status" role="status"></div>
+  <form id="form" autocomplete="off">
+    <textarea id="q" rows="2" maxlength="2000" placeholder="Ask about steel casting…" aria-label="Your question" disabled></textarea>
+    <button id="send" type="submit" disabled>Send</button>
+  </form>
+  <p class="fine">Answers are drawn from SFSA wiki documents and can contain errors. Check anything important against the cited sources.</p>
+</div>
+<script src="/widget.js" defer></script>
+</body>
+</html>

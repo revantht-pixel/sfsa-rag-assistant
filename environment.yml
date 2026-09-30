@@ -55,8 +55,13 @@ dependencies:
      - faiss-cpu==1.13.2
      - transformers==4.57.6
      - tokenizers==0.22.2
-     # Web search
-     - tavily-python==0.7.21
+     # Web search -- disabled by project decision (Dave/SFSA 2026-09-17, reaffirmed by
+     # Revanth 2026-09-28): not installed, so the capability doesn't exist on this box,
+     # not just switched off. The code already handles the package being absent (a plain
+     # log line + empty results, see nodes/web_search.py), so nothing else depends on this.
+     # To re-enable: uncomment, set SFSA_WEB_SEARCH_ENABLED=true and a real TAVILY_API_KEY,
+     # and add a decision-log entry.
+     # - tavily-python==0.7.21
      # Configuration and validation
      - pydantic==2.12.5
      - pydantic-settings==2.12.0

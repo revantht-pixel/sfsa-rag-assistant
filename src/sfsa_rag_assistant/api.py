@@ -117,21 +117,32 @@ def _public_sources(raw_sources: Optional[List[Dict[str, Any]]]) -> List[Source]
 
 def _configure_logging(package: str = "sfsa_rag_assistant", root: Optional[logging.Logger] = None) -> None:
     """
-    Make this package's INFO logs (the audit trail: who asked, when, how long)
-    actually appear when the API runs under uvicorn.
+    Decide what the API may write to the server log, and make the audit trail
+    (who asked, when, how long) actually appear when it runs under uvicorn.
 
-    uvicorn configures only its own loggers, so without this the audit lines
-    are silently dropped. It does nothing if the host process (a test run, the
-    CLI) has already set logging up.
+    Content policy -- always applied, whoever set up the handlers. The pipeline
+    modules (graph, nodes, generation, retrieval, ...) narrate every question at
+    INFO: the question, the rewritten question, answer previews, the model's
+    reasoning. That is member content, and the server log is persistent, so only
+    the API's own audit lines (user, duration, question *length*) may be written
+    at INFO; everything else is held to WARNING and above. Modules added later
+    inherit the restriction. Limit: an ERROR line from the pipeline can still
+    carry its exception's text, which for a model-output parsing failure can
+    echo model output.
+
+    Handlers: uvicorn configures only its own loggers, so without a handler the
+    audit lines are silently dropped. One is added unless the host process (a
+    test run, the CLI) has already set logging up.
     """
     root = root or logging.getLogger()
     pkg = logging.getLogger(package)
+    pkg.setLevel(logging.WARNING)
+    logging.getLogger(f"{package}.api").setLevel(logging.INFO)
     if root.handlers or pkg.handlers:
         return
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     pkg.addHandler(handler)
-    pkg.setLevel(logging.INFO)
 
 
 def _safe_name(name: str) -> str:

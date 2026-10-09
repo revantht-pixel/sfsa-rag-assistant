@@ -313,7 +313,8 @@ def test_audit_logging_is_switched_on_when_the_host_has_not_configured_it():
     bare_root = logging.Logger("bare-root")               # a host process with no logging set up
     pkg = logging.getLogger("audit_test_pkg_unconfigured")
     _configure_logging("audit_test_pkg_unconfigured", root=bare_root)
-    assert pkg.level == logging.INFO
+    assert logging.getLogger("audit_test_pkg_unconfigured.api").level == logging.INFO   # the audit lines
+    assert pkg.level == logging.WARNING                    # everything else: see test_log_privacy.py
     assert len(pkg.handlers) == 1
     assert "%(asctime)s" in pkg.handlers[0].formatter._fmt      # timestamped, so it can serve as an audit line
     _configure_logging("audit_test_pkg_unconfigured", root=bare_root)
@@ -340,6 +341,8 @@ def test_the_app_starts_its_audit_logging_via_lifespan(monkeypatch):
 
 
 # ── secrets and content stay out of the logs ─────────────────────────────────
+# This covers the API layer only: the workflow is a stand-in here, so it cannot see what the
+# real pipeline logs. test_log_privacy.py runs the real pipeline.
 def test_cookies_and_question_text_never_reach_the_logs(client, parts, caplog):
     caplog.set_level(logging.DEBUG)
     chat(client, body={"question": "CONFIDENTIAL-PROCESS-QUESTION"})

@@ -7,7 +7,8 @@ the LangGraph workflow.
 """
 
 import logging
-from typing import List, Dict, Any
+import threading
+from typing import List, Dict, Any, Tuple
 from langchain_core.documents import Document
 
 from ..retrieval import DocumentRetriever
@@ -15,6 +16,33 @@ from ..app_config import settings
 from ..states import SFSAAgenticState
 
 logger = logging.getLogger(__name__)
+
+# Building a DocumentRetriever loads the embedding model and the whole index, which took about
+# 17 s on the production box -- a third of every answer when it was done per question. So one is
+# built per (index, model) for the life of the process and reused.
+_retrievers: Dict[Tuple[str, str], DocumentRetriever] = {}
+_retrievers_lock = threading.Lock()        # also stops concurrent first questions each building their own
+
+# Searches are short, and the embedding model's tokenizer can fail ("Already borrowed") when
+# one instance is used by several threads at once, so searches take turns.
+_search_lock = threading.Lock()
+
+
+def _get_retriever(vectordb_path: Any, embedding_model_name: str) -> DocumentRetriever:
+    """The shared retriever for this index and model; built on first use. A failed build is not cached."""
+    key = (str(vectordb_path), embedding_model_name)
+    with _retrievers_lock:
+        retriever = _retrievers.get(key)
+        if retriever is None:
+            retriever = DocumentRetriever(vectordb_path=vectordb_path, embedding_model_name=embedding_model_name)
+            _retrievers[key] = retriever
+        return retriever
+
+
+def clear_retriever_cache() -> None:
+    """Forget the shared retrievers; the next question builds a fresh one (e.g. after the index is replaced)."""
+    with _retrievers_lock:
+        _retrievers.clear()
 
 
 def retrieve_context(state: SFSAAgenticState) -> SFSAAgenticState:
@@ -63,11 +91,8 @@ def retrieve_context(state: SFSAAgenticState) -> SFSAAgenticState:
         logger.info(f"  ↳ Contextualized: {query}")
     
     try:
-        # Initialize DocumentRetriever with settings
-        retriever_instance = DocumentRetriever(
-            vectordb_path=settings.get_vectordb_path(),
-            embedding_model_name=settings.embedding_model
-        )
+        # The shared DocumentRetriever for the configured index and model
+        retriever_instance = _get_retriever(settings.get_vectordb_path(), settings.embedding_model)
         
         # Get retriever with configured search parameters
         retriever = retriever_instance.get_retriever(
@@ -78,7 +103,8 @@ def retrieve_context(state: SFSAAgenticState) -> SFSAAgenticState:
         logger.info(f"Retrieving top {settings.retrieval_k} documents...")
         
         # Retrieve documents
-        retrieved_docs: List[Document] = retriever.invoke(query)
+        with _search_lock:
+            retrieved_docs: List[Document] = retriever.invoke(query)
         
         logger.info(f"Retrieved {len(retrieved_docs)} documents")
         

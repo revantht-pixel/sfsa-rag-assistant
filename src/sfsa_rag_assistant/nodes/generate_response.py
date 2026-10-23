@@ -9,7 +9,7 @@ This is the core generation node that produces answers using either:
 """
 
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from ..generation import TextGenerator
 from ..app_config import settings
@@ -63,7 +63,8 @@ def generate_response(state: SFSAAgenticState) -> SFSAAgenticState:
         logger.error("No context available for generation")
         return {
             "current_response": "I apologize, but I don't have enough context to answer your question.",
-            "error": "No context available for generation"
+            "error": "No context available for generation",
+            "failure": _failure_after(state, "no_context")
         }
     
     # Step 2: Select query (prefer refined from Agent 3, then contextualized, fallback to original)
@@ -73,7 +74,8 @@ def generate_response(state: SFSAAgenticState) -> SFSAAgenticState:
         logger.error("No query available for generation")
         return {
             "current_response": "I apologize, but I don't have a question to answer.",
-            "error": "No query available for generation"
+            "error": "No query available for generation",
+            "failure": _failure_after(state, "no_query")
         }
     
     # Step 3: Get conversation history
@@ -124,7 +126,8 @@ def generate_response(state: SFSAAgenticState) -> SFSAAgenticState:
             "current_response": response,
             "accumulated_responses": accumulated_responses,
             "validation_attempts": current_attempt,
-            "error": None
+            "error": None,
+            "failure": _failure_after(state, None)
         }
     
     except Exception as e:
@@ -132,8 +135,23 @@ def generate_response(state: SFSAAgenticState) -> SFSAAgenticState:
         error_message = f"I apologize, but I encountered an error while generating a response: {str(e)}"
         return {
             "current_response": error_message,
-            "error": f"Generation failed: {str(e)}"
+            "error": f"Generation failed: {str(e)}",
+            "failure": _failure_after(state, "generation")
         }
+
+
+def _failure_after(state: SFSAAgenticState, failed: Optional[str]) -> Optional[str]:
+    """
+    The value of `failure` once this node has run.
+
+    A retrieval failure is never cleared: an answer written without its sources
+    is not a good answer, however well generation then goes. Any other failure
+    is replaced by this attempt's outcome, so a generation retry that works
+    clears an earlier generation failure.
+    """
+    if state.get("failure") == "retrieval":
+        return "retrieval"
+    return failed
 
 
 def _build_generation_prompt(

@@ -105,7 +105,8 @@ def retrieve_context(state: SFSAAgenticState) -> SFSAAgenticState:
             "retrieved_docs": [],
             "retrieved_formatted": "",
             "sources": [],
-            "error": f"Retrieval failed: {str(e)}"
+            "error": f"Retrieval failed: {str(e)}",
+            "failure": "retrieval"
         }
 
 

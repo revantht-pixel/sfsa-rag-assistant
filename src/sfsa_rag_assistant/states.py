@@ -233,7 +233,11 @@ class SFSAAgenticState(TypedDict, total=False):
     # ═══════════════════════════════════════════════════════════════════════
     # Error Tracking
     # ═══════════════════════════════════════════════════════════════════════
-    error: Optional[str]  # Any error messages from nodes
+    error: Optional[str]  # Any error messages from nodes (overwritten by later nodes)
+    # Set when the workflow could not produce a usable answer: "retrieval", "generation",
+    # "no_context" or "no_query". Unlike `error` it is not overwritten by later nodes, and
+    # it names a stage, never carries exception text, so callers can act on it safely.
+    failure: Optional[str]
 
 
 # ─── Helper Functions for State Manipulation ────────────────────────────────

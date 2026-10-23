@@ -154,6 +154,27 @@ def _reject(status: int, detail: str, **headers: str) -> HTTPException:
     return HTTPException(status_code=status, detail=detail, headers=headers or None)
 
 
+def _generic_failure(request_id: str) -> HTTPException:
+    """What a member sees when answering failed: no internals, just a reference for the admins."""
+    return _reject(500, f"Something went wrong answering that. Please try again. (ref {request_id})")
+
+
+def _failure_code(result: Any) -> Optional[str]:
+    """
+    The pipeline's own failure marker, if it says it failed.
+
+    The pipeline catches its errors and hands back an apology as the "answer", often
+    with the exception's text in it -- so a result carrying this marker is a failure,
+    whatever its `response` says. Only a short code of ours is ever returned (and
+    logged), never text from the pipeline.
+    """
+    if not isinstance(result, dict):
+        return None
+    metadata = result.get("metadata")
+    failure = metadata.get("failure") if isinstance(metadata, dict) else None
+    return re.sub(r"[^a-z_]", "?", str(failure).lower())[:24] if failure else None
+
+
 # ─── App factory ─────────────────────────────────────────────────────────────
 def create_app(
     cfg: Optional[Settings] = None,
@@ -311,9 +332,14 @@ def create_app(
             )
         except Exception as exc:  # noqa: BLE001 -- never leak internals to the client
             logger.error("chat failed rid=%s user=%s error=%s", request_id, who, type(exc).__name__)
-            raise _reject(500, f"Something went wrong answering that. Please try again. (ref {request_id})")
+            raise _generic_failure(request_id)
         finally:
             limiter.release(identity.user_id)
+
+        failure = _failure_code(result)
+        if failure:
+            logger.error("chat failed rid=%s user=%s error=pipeline:%s", request_id, who, failure)
+            raise _generic_failure(request_id)
 
         logger.info("chat ok rid=%s user=%s ms=%d q_chars=%d", request_id, who,
                     int((time.monotonic() - started) * 1000), len(question))

@@ -285,6 +285,41 @@ def test_workflow_failure_is_generic_and_releases_the_member(client, parts):
     assert chat(client).status_code == 200           # the failed request did not leave the member locked out
 
 
+@pytest.mark.parametrize("failure", ["generation", "retrieval", "no_context", "workflow", "no_output"])
+def test_a_result_the_pipeline_marks_failed_is_a_generic_error_and_audited_as_failed(client, parts, caplog, failure):
+    # The real pipeline catches its own errors and returns an apology as the "answer", often with
+    # the exception's text in it; the marker in the result's metadata is how the API tells.
+    caplog.set_level(logging.INFO)
+    _, workflow = parts
+    workflow.result = {
+        "response": "I apologize: HTTPConnectionPool(host='127.0.0.1', port=11434) /etc/passwd",
+        "sources": [],
+        "metadata": {"failure": failure},
+    }
+    r = chat(client)
+    assert r.status_code == 500
+    assert "ref " in r.text
+    for internal in ("passwd", "11434", "apologize"):
+        assert internal not in r.text
+    assert f"pipeline:{failure}" in caplog.text and "chat ok" not in caplog.text
+    workflow.result = {"response": "Answer text.", "sources": []}
+    assert chat(client).status_code == 200           # the failed request did not leave the member locked out
+
+
+def test_a_result_with_no_failure_marker_is_an_answer(client, parts):
+    _, workflow = parts
+    workflow.result = {"response": "Answer text.", "sources": [], "metadata": {"failure": None, "workflow_path": "simple_rag"}}
+    assert chat(client).json()["response"] == "Answer text."
+
+
+def test_the_failure_code_in_the_log_cannot_carry_other_text(client, parts, caplog):
+    caplog.set_level(logging.INFO)
+    _, workflow = parts
+    workflow.result = {"response": "x", "sources": [], "metadata": {"failure": "generation\nchat ok user=Mallory " + "x" * 50}}
+    assert chat(client).status_code == 500
+    assert "\nchat ok" not in caplog.text and "Mallory" not in caplog.text
+
+
 def test_wiki_outage_is_a_generic_503(client, parts):
     verifier, workflow = parts
     verifier.error = WikiUnavailable("HTTP 502 from internal-host")

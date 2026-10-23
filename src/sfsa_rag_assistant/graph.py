@@ -277,7 +277,7 @@ def run_workflow(
                 "query": user_query,
                 "response": "Workflow completed but no output was generated.",
                 "sources": [],
-                "metadata": {"error": "No final_output in state"}
+                "metadata": {"error": "No final_output in state", "failure": "no_output"}
             }
         
         logger.info("=" * 80)
@@ -297,7 +297,8 @@ def run_workflow(
             "sources": [],
             "metadata": {
                 "error": str(e),
-                "workflow_path": "failed"
+                "workflow_path": "failed",
+                "failure": "workflow"
             }
         }
 

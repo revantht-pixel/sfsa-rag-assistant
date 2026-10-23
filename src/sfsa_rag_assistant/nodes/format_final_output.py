@@ -232,7 +232,8 @@ def _build_metadata(state: SFSAAgenticState) -> Dict[str, Any]:
             "query": state.get("web_search_query", "") if used_web_search else None,
             "num_results": len(state.get("web_search_results", []))
         },
-        "errors": state.get("error")
+        "errors": state.get("error"),
+        "failure": state.get("failure")
     }
     
     return metadata
